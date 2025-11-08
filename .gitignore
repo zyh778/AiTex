@@ -163,6 +163,54 @@ output/
 
 nutika_dist/
 # BMad-Method files
+# BMad-Method files
 .bmad-core/
 .claude/commands/BMad/
-docs/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+build/
+target/
+out/
+src-tauri/target/
+
+# Tauri specific
+src-tauri/target/
+
+# Vite
+.vite/
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup files
+*.backup
+*.bak
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.*.local
