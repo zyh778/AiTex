@@ -162,3 +162,7 @@ output/
 .idea/*
 
 nutika_dist/
+# BMad-Method files
+.bmad-core/
+.claude/commands/BMad/
+docs/

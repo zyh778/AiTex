@@ -447,11 +447,6 @@ A: 当前版本支持单个文件处理，批量功能正在开发中。
 - [Tailwind CSS](https://tailwindcss.com/) - 实用优先的CSS框架
 - [Vite](https://vitejs.dev/) - 下一代前端构建工具
 
-## 📞 联系方式
-
-- **GitHub Issues**: [提交问题](https://github.com/yourusername/AiTex/issues)
-- **GitHub Discussions**: [功能讨论](https://github.com/yourusername/AiTex/discussions)
-- **Email**: your-email@example.com
 
 ---
 

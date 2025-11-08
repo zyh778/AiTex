@@ -447,11 +447,6 @@ Thanks to the following open source projects:
 - [Tailwind CSS](https://tailwindcss.com/) - A utility-first CSS framework
 - [Vite](https://vitejs.dev/) - Next generation frontend tooling
 
-## 📞 Contact
-
-- **GitHub Issues**: [Submit Issues](https://github.com/yourusername/AiTex/issues)
-- **GitHub Discussions**: [Feature Discussions](https://github.com/yourusername/AiTex/discussions)
-- **Email**: your-email@example.com
 
 ---
 
