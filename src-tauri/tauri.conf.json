@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "AiTex",
+  "version": "2.0.0",
+  "identifier": "com.aitex.app",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AiTex - 数学公式识别",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "AiTex Team",
+    "category": "Productivity",
+    "shortDescription": "智能数学公式识别软件",
+    "longDescription": "AiTex 是一款免费的智能数学公式识别软件，能够将图像中的数学公式转换为可编辑的 LaTeX 格式。",
+    "resources": [],
+    "externalBin": [],
+    "copyright": ""
+  },
+  "plugins": {}
+}

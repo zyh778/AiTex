@@ -1,0 +1,13 @@
+{
+  "identifier": "default",
+  "description": "Default capability",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "dialog:open",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "clipboard:all"
+  ]
+}
