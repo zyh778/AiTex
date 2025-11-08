@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ImageViewer } from './components/ImageViewer';
 import { LatexRenderer } from './components/LatexRenderer';
 import { Toolbar } from './components/Toolbar';
 import { SettingsDialog } from './components/SettingsDialog';
 import { apiService } from './services/api';
+import { invoke } from '@tauri-apps/api/tauri';
 
 function App() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -11,6 +12,21 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [imagePath, setImagePath] = useState<string>('');
+
+  // 应用启动时设置窗口位置和大小
+  useEffect(() => {
+    const setupWindow = async () => {
+      try {
+        await invoke('setup_window_centered');
+      } catch (error) {
+        console.error('设置窗口失败:', error);
+      }
+    };
+
+    // 延迟一小段时间确保窗口完全初始化
+    const timer = setTimeout(setupWindow, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleImageSelect = (path: string) => {
     setImagePath(path);
@@ -35,18 +51,43 @@ function App() {
   };
 
   const handleScreenshot = async () => {
-    await apiService.triggerScreenshot();
-    // 延迟一下再检查剪贴板
-    setTimeout(async () => {
-      try {
-        const clipboardImage = await apiService.getClipboardImage();
-        if (clipboardImage) {
-          handleImageSelect(clipboardImage);
+    try {
+      // 先触发截图
+      await apiService.triggerScreenshot();
+
+      // 显示加载状态
+      setLoading(true);
+
+      // 带重试机制的剪贴板检查
+      const checkClipboardWithRetry = async (retries = 3, delay = 1000): Promise<void> => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            // 每次重试增加延迟
+            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+
+            const clipboardImage = await apiService.getClipboardImage();
+            if (clipboardImage) {
+              handleImageSelect(clipboardImage);
+              return;
+            }
+          } catch (error) {
+            console.warn(`第 ${i + 1} 次尝试获取剪贴板失败:`, error);
+            if (i === retries - 1) {
+              alert('无法获取截图图像，请确保截图已完成并包含图像内容');
+            }
+          }
         }
-      } catch (error) {
-        console.error('获取截图失败:', error);
-      }
-    }, 1000);
+      };
+
+      // 异步执行检查，不阻塞用户界面
+      checkClipboardWithRetry().finally(() => {
+        setLoading(false);
+      });
+
+    } catch (error) {
+      setLoading(false);
+      alert(`截图失败: ${error}`);
+    }
   };
 
   const handleCopyLatex = () => {

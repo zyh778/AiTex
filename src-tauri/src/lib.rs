@@ -2,8 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tauri::{Manager, State};
+use base64::Engine;
+use tauri::{State, Window};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // API配置结构
@@ -40,6 +41,31 @@ pub struct AppState {
     pub config: Arc<Mutex<ApiConfig>>,
 }
 
+// 获取配置文件路径
+fn get_config_path() -> Result<std::path::PathBuf, String> {
+    // 优先使用应用数据目录，其次使用用户目录
+    if let Some(config_dir) = dirs::config_dir() {
+        let dir = config_dir.join("AiTex");
+        // 确保目录存在
+        std::fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
+        Ok(dir.join("config.json"))
+    } else if let Some(home_dir) = dirs::home_dir() {
+        if cfg!(target_os = "macos") {
+            let dir = home_dir.join("Library/Application Support/AiTex");
+            std::fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
+            Ok(dir.join("config.json"))
+        } else {
+            // Linux 和其他系统，包括 Windows 作为回退
+            let dir = home_dir.join(".config/aitex");
+            std::fs::create_dir_all(&dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
+            Ok(dir.join("config.json"))
+        }
+    } else {
+        // 最后的回退位置
+        Ok(PathBuf::from(".aitex/config.json"))
+    }
+}
+
 // 读取API配置
 #[tauri::command]
 async fn get_api_config(state: State<'_, AppState>) -> Result<ApiConfig, String> {
@@ -47,23 +73,55 @@ async fn get_api_config(state: State<'_, AppState>) -> Result<ApiConfig, String>
     Ok(config.clone())
 }
 
+// 验证API配置
+#[tauri::command]
+async fn validate_api_config(config: ApiConfig) -> Result<String, String> {
+    // 基本验证
+    if config.provider.trim().is_empty() {
+        return Err("API提供商不能为空".to_string());
+    }
+
+    if config.api_url.trim().is_empty() {
+        return Err("API地址不能为空".to_string());
+    }
+
+    if config.api_key.trim().is_empty() {
+        return Err("API密钥不能为空".to_string());
+    }
+
+    if config.model_name.trim().is_empty() {
+        return Err("模型名称不能为空".to_string());
+    }
+
+    // 验证API URL格式
+    if !config.api_url.starts_with("http://") && !config.api_url.starts_with("https://") {
+        return Err("API地址必须以 http:// 或 https:// 开头".to_string());
+    }
+
+    // 验证API密钥格式（基本长度检查）
+    if config.api_key.len() < 10 {
+        return Err("API密钥长度似乎不正确，请检查".to_string());
+    }
+
+    // 尝试连接测试
+    test_api_connection(config).await
+}
+
 // 保存API配置
 #[tauri::command]
-async fn save_api_config(config: ApiConfig, state: State<'_, AppState>) -> Result<(), String> {
+async fn save_api_config(config: ApiConfig, state: State<'_, AppState>) -> Result<String, String> {
+    // 先验证配置
+    validate_api_config(config.clone()).await?;
+
     let mut state_config = state.config.lock().unwrap();
     *state_config = config.clone();
 
     // 保存到文件
-    if let Ok(home_dir) = dirs::home_dir() {
-        let config_path = home_dir.join(".aitex/config.json");
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-        std::fs::write(config_path, json).map_err(|e| e.to_string())?;
-    }
+    let config_path = get_config_path()?;
+    let json = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, json).map_err(|e| e.to_string())?;
 
-    Ok(())
+    Ok("配置保存成功".to_string())
 }
 
 // 测试API连接
@@ -86,7 +144,7 @@ async fn test_api_connection(config: ApiConfig) -> Result<String, String> {
     ]);
     body.insert("messages".to_string(), messages);
     body.insert("max_tokens".to_string(), serde_json::Value::Number(serde_json::Number::from(10)));
-    body.insert("temperature".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.2).unwrap()));
+    body.insert("temperature".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.2).unwrap_or(serde_json::Number::from(0))));
 
     let response = client
         .post(format!("{}/chat/completions", config.api_url))
@@ -189,7 +247,7 @@ async fn process_image(image_path: String, state: State<'_, AppState>) -> Result
     ]);
     body.insert("messages".to_string(), messages);
     body.insert("max_tokens".to_string(), serde_json::Value::Number(serde_json::Number::from(1024)));
-    body.insert("temperature".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.2).unwrap()));
+    body.insert("temperature".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.2).unwrap_or(serde_json::Number::from(0))));
 
     let response = client
         .post(format!("{}/chat/completions", config.api_url))
@@ -262,12 +320,108 @@ fn clean_latex(latex: &str) -> String {
 #[tauri::command]
 async fn get_clipboard_image() -> Result<Option<String>, String> {
     use arboard::Clipboard;
+    use tempfile::NamedTempFile;
 
     let mut clipboard = Clipboard::new()
         .map_err(|e| format!("访问剪贴板失败: {}", e))?;
 
-    // 暂时返回空，因为剪贴板图像处理需要更复杂的逻辑
-    Ok(None)
+    // 获取剪贴板中的图像数据
+    match clipboard.get_image() {
+        Ok(image) => {
+            // 创建临时文件保存图像
+            let temp_file = NamedTempFile::with_suffix(".png")
+                .map_err(|e| format!("创建临时文件失败: {}", e))?;
+
+            let temp_path = temp_file.path().to_string_lossy().to_string();
+
+            // 将arboard图像转换为image crate的格式
+            // arboard的Image包含width, height和bytes (RGBA格式)
+            let width = image.width as u32;
+            let height = image.height as u32;
+
+            // 转换RGBA到RGB
+            let mut rgb_data = Vec::with_capacity((width * height * 3) as usize);
+            let pixels = &image.bytes;
+
+            for chunk in pixels.chunks_exact(4) {
+                rgb_data.push(chunk[0]); // R
+                rgb_data.push(chunk[1]); // G
+                rgb_data.push(chunk[2]); // B
+                // 跳过 Alpha 通道
+            }
+
+            // 创建RGB图像
+            let img = image::RgbImage::from_raw(width, height, rgb_data)
+                .ok_or("图像数据无效")?;
+
+            // 保存为PNG
+            img.save(&temp_path)
+                .map_err(|e| format!("保存图像失败: {}", e))?;
+
+            // 保留临时文件（不删除）
+            let _ = temp_file.keep().map_err(|e| format!("保留临时文件失败: {}", e))?;
+
+            Ok(Some(temp_path))
+        }
+        Err(arboard::Error::ContentNotAvailable) => {
+            // 剪贴板中没有图像
+            Ok(None)
+        }
+        Err(e) => {
+            // 其他错误
+            Err(format!("获取剪贴板图像失败: {}", e))
+        }
+    }
+}
+
+// 设置窗口位置和大小
+#[tauri::command]
+async fn setup_window_centered(window: Window) -> Result<(), String> {
+    // 获取当前监视器信息
+    match window.current_monitor() {
+        Ok(Some(monitor)) => {
+            let monitor_size = monitor.size();
+            let monitor_position = monitor.position();
+
+            // 计算窗口尺寸（屏幕的2/3，但设置最小尺寸）
+            let min_width = 800u32;
+            let min_height = 600u32;
+            let scale_factor = 2.0 / 3.0; // 使用屏幕的2/3
+
+            let window_width = std::cmp::max(
+                min_width,
+                (monitor_size.width as f32 * scale_factor) as u32
+            );
+            let window_height = std::cmp::max(
+                min_height,
+                (monitor_size.height as f32 * scale_factor) as u32
+            );
+
+            // 计算居中位置，进行类型转换
+            let x = monitor_position.x + ((monitor_size.width - window_width) / 2) as i32;
+            let y = monitor_position.y + ((monitor_size.height - window_height) / 2) as i32;
+
+            // 设置窗口位置和大小
+            window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
+                .map_err(|e| format!("设置窗口位置失败: {}", e))?;
+
+            window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                width: window_width,
+                height: window_height
+            }))
+                .map_err(|e| format!("设置窗口大小失败: {}", e))?;
+
+            println!("窗口已设置为: {}x{} @ ({}, {})", window_width, window_height, x, y);
+        }
+        Ok(None) => {
+            return Err("无法获取监视器信息".to_string());
+        }
+        Err(e) => {
+            return Err(format!("获取监视器失败: {}", e));
+        }
+    }
+
+    Ok(())
 }
 
 // 触发截图
@@ -312,10 +466,9 @@ async fn trigger_screenshot() -> Result<(), String> {
 
 pub fn run_main() {
     // 加载配置
-    let config = if let Ok(home_dir) = dirs::home_dir() {
-        let config_path = home_dir.join(".aitex/config.json");
+    let config = if let Ok(config_path) = get_config_path() {
         if config_path.exists() {
-            let json = std::fs::read_to_string(config_path).unwrap_or_default();
+            let json = std::fs::read_to_string(&config_path).unwrap_or_default();
             serde_json::from_str(&json).unwrap_or_default()
         } else {
             ApiConfig::default()
@@ -331,10 +484,12 @@ pub fn run_main() {
         .invoke_handler(tauri::generate_handler![
             get_api_config,
             save_api_config,
+            validate_api_config,
             test_api_connection,
             process_image,
             get_clipboard_image,
-            trigger_screenshot
+            trigger_screenshot,
+            setup_window_centered
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

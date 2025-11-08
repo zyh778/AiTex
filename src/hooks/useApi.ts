@@ -41,12 +41,17 @@ export const useApi = () => {
     return await apiService.testConnection(config);
   };
 
+  const validateConfig = async (configToValidate: ApiConfig): Promise<string> => {
+    return await apiService.validateConfig(configToValidate);
+  };
+
   return {
     config,
     loading,
     error,
     saveConfig,
     testConnection,
+    validateConfig,
     reloadConfig: loadConfig
   };
 };

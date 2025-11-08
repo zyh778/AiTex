@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // 导入 lib.rs 中的 main 函数
-use aitex_lib::run_main;
+use aitex::run_main;
 
 fn main() {
     run_main();

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/tauri';
 import type { ApiConfig } from '../types/config';
 
 export const apiService = {
@@ -7,8 +7,13 @@ export const apiService = {
     return await invoke('get_api_config');
   },
 
+  // 验证API配置
+  async validateConfig(config: ApiConfig): Promise<string> {
+    return await invoke('validate_api_config', { config });
+  },
+
   // 保存API配置
-  async saveConfig(config: ApiConfig): Promise<void> {
+  async saveConfig(config: ApiConfig): Promise<string> {
     return await invoke('save_api_config', { config });
   },
 

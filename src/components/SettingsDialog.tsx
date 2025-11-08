@@ -8,9 +8,10 @@ interface SettingsDialogProps {
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
-  const { config, saveConfig, testConnection } = useApi();
+  const { config, saveConfig, testConnection, validateConfig } = useApi();
   const [testResult, setTestResult] = useState<string>('');
   const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [localConfig, setLocalConfig] = useState<ApiConfig | null>(null);
 
   React.useEffect(() => {
@@ -22,11 +23,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
   if (!isOpen || !localConfig) return null;
 
   const handleSave = async () => {
+    setSaving(true);
+    setTestResult('');
     try {
-      await saveConfig(localConfig);
-      onClose();
+      const validationResult = await validateConfig(localConfig);
+      setTestResult(validationResult);
+
+      // 如果验证成功，保存配置
+      if (validationResult.includes('成功')) {
+        await saveConfig(localConfig);
+        setTimeout(() => {
+          onClose();
+        }, 1500); // 延迟关闭以显示成功消息
+      }
     } catch (error) {
-      setTestResult(`保存失败: ${error}`);
+      setTestResult(`验证失败: ${error}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -48,11 +61,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <h2 className="text-xl font-bold mb-4">API 设置</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-[600px] h-[450px] flex flex-col">
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+          <h2 className="text-xl font-bold">API 设置</h2>
+          <button
+            onClick={onClose}
+            className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg p-1 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               启用云端识别
@@ -125,13 +148,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
             <textarea
               value={localConfig.system_prompt}
               onChange={(e) => updateConfig('system_prompt', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg h-32"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg h-40 resize-none"
               placeholder="系统提示词..."
             />
           </div>
 
           {testResult && (
-            <div className={`p-3 rounded-lg ${
+            <div className={`p-3 rounded-lg flex-shrink-0 ${
               testResult.includes('成功')
                 ? 'bg-green-100 text-green-700'
                 : 'bg-red-100 text-red-700'
@@ -139,30 +162,31 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
               {testResult}
             </div>
           )}
+        </div>
 
-          <div className="flex justify-between pt-4">
+        <div className="flex justify-between pt-4 flex-shrink-0 border-t border-gray-200">
+          <button
+            onClick={handleTest}
+            disabled={testing}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {testing ? '测试中...' : '测试连接'}
+          </button>
+
+          <div className="space-x-4">
             <button
-              onClick={handleTest}
-              disabled={testing}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
             >
-              {testing ? '测试中...' : '测试连接'}
+              取消
             </button>
-
-            <div className="space-x-4">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSave}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                保存
-              </button>
-            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? '验证中...' : '保存'}
+            </button>
           </div>
         </div>
       </div>
